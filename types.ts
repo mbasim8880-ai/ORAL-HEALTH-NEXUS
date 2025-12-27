@@ -17,11 +17,11 @@ export interface UserProfile {
   currentPlan: DentalProblem;
 }
 
-export interface Tip {
+export type Tip = {
   id: string;
   title: string;
   description: string;
-}
+};
 
 export interface PlanData {
   problem: DentalProblem;

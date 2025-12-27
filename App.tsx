@@ -11,21 +11,11 @@ const App: React.FC = () => {
   const [view, setView] = useState<AppState>(AppState.SPLASH);
   const [user, setUser] = useState<UserProfile | null>(null);
   const [theme, setTheme] = useState<'light' | 'dark'>(storage.getTheme());
-  const [apiKeyValid, setApiKeyValid] = useState<boolean | null>(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   // Widget Security & Context
   const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
   const nexusApiKey = urlParams.get('nexus-api-key') || 'NEXUS-DEMO-2025';
-
-  useEffect(() => {
-    // Simulated API Key Validation
-    if (nexusApiKey.startsWith('NEXUS-')) {
-      setApiKeyValid(true);
-    } else {
-      setApiKeyValid(false);
-      console.warn("Nexus AI Key Validation failed. Continuing in demo mode.");
-    }
-  }, [nexusApiKey]);
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -35,10 +25,20 @@ const App: React.FC = () => {
     }
   }, [theme]);
 
+  // Handle background sync when profile exists
   useEffect(() => {
     const profile = storage.getUserProfile();
     if (profile) {
       setUser(profile);
+      // Background Sync
+      setIsSyncing(true);
+      storage.restoreFromCloud(profile.mobile).then((syncedProfile) => {
+        if (syncedProfile) {
+          setUser(syncedProfile);
+          console.log("Nexus: Background Cloud Sync Complete");
+        }
+        setIsSyncing(false);
+      });
     }
   }, []);
 
@@ -56,14 +56,15 @@ const App: React.FC = () => {
     setView(AppState.REGISTRATION);
   };
 
-  const handleRegistration = (profile: UserProfile) => {
-    storage.setUserProfile(profile);
+  const handleRegistration = async (profile: UserProfile) => {
+    // Await the cloud sync
+    const success = await storage.setUserProfile(profile);
     setUser(profile);
     setView(AppState.DASHBOARD);
   };
 
-  const handleUpdateUser = (profile: UserProfile) => {
-    storage.setUserProfile(profile);
+  const handleUpdateUser = async (profile: UserProfile) => {
+    await storage.setUserProfile(profile);
     setUser(profile);
   };
 
@@ -85,6 +86,13 @@ const App: React.FC = () => {
           theme={theme}
           onToggleTheme={toggleTheme}
         />
+      )}
+      
+      {/* Background Sync Indicator */}
+      {isSyncing && (
+        <div className="fixed top-4 right-4 z-[10001] animate-pulse">
+           <div className="w-2 h-2 rounded-full bg-nexus-cyan shadow-[0_0_10px_rgba(6,182,212,0.5)]"></div>
+        </div>
       )}
     </div>
   );

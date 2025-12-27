@@ -1,5 +1,6 @@
 
 import { UserProfile, DentalProblem, ScanResult, ToothStatus } from '../types';
+import { supabase } from './supabase.ts';
 
 const STORAGE_KEYS = {
   USER_PROFILE: 'ohn_user_profile',
@@ -12,14 +13,11 @@ const STORAGE_KEYS = {
   BADGES: 'ohn_badges',
 };
 
-const SCAN_EXPIRY_MS = 5 * 60 * 1000; // 5 minutes
-
 const safeJsonParse = (data: string | null) => {
   if (!data) return null;
   try {
     return JSON.parse(data);
   } catch (e) {
-    console.warn("Storage parse error, resetting key:", e);
     return null;
   }
 };
@@ -28,7 +26,7 @@ const safeStorageSet = (key: string, value: string) => {
   try {
     localStorage.setItem(key, value);
   } catch (e) {
-    console.error("Critical Storage Error:", e);
+    console.error("Storage Error:", e);
   }
 };
 
@@ -36,63 +34,170 @@ export const storage = {
   getUserProfile: (): UserProfile | null => {
     return safeJsonParse(localStorage.getItem(STORAGE_KEYS.USER_PROFILE));
   },
-  setUserProfile: (profile: UserProfile) => {
+
+  setUserProfile: async (profile: UserProfile): Promise<boolean> => {
+    // 1. Save Locally
     safeStorageSet(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
     safeStorageSet(STORAGE_KEYS.REGISTERED, 'true');
+    
+    // 2. Cloud Sync
+    try {
+      const { error } = await supabase.from('profiles').upsert({
+        mobile: profile.mobile,
+        full_name: profile.fullName,
+        age: profile.age,
+        gender: profile.gender,
+        current_plan: profile.currentPlan,
+        updated_at: new Date().toISOString()
+      }, { onConflict: 'mobile' });
+
+      if (error) {
+        console.error("Cloud Error:", error);
+        alert(`NEXUS SYNC ERROR: ${error.message}`);
+        return false;
+      }
+      return true;
+    } catch (err: any) {
+      alert(`SYNC FAILED: ${err.message || 'Network error'}`);
+      return false;
+    }
   },
+
   isRegistered: (): boolean => {
     return localStorage.getItem(STORAGE_KEYS.REGISTERED) === 'true';
   },
+
   getPlanProgress: (plan: DentalProblem): string[] => {
     const allProgress = safeJsonParse(localStorage.getItem(STORAGE_KEYS.PLAN_PROGRESS)) || {};
     return allProgress[plan] || [];
   },
-  savePlanProgress: (plan: DentalProblem, tipId: string) => {
+
+  savePlanProgress: async (plan: DentalProblem, tipId: string) => {
     const allProgress = safeJsonParse(localStorage.getItem(STORAGE_KEYS.PLAN_PROGRESS)) || {};
     const currentPlanProgress = allProgress[plan] || [];
+    const profile = storage.getUserProfile();
     
     if (!currentPlanProgress.includes(tipId)) {
       allProgress[plan] = [...currentPlanProgress, tipId];
       safeStorageSet(STORAGE_KEYS.PLAN_PROGRESS, JSON.stringify(allProgress));
+
+      if (profile) {
+        try {
+          await supabase.from('learned_tips').insert({
+            mobile: profile.mobile,
+            plan: plan,
+            tip_id: tipId
+          });
+        } catch (err) {}
+      }
     }
   },
+
   getLatestScan: (): (ScanResult & { timestamp?: number }) | null => {
-    const data = safeJsonParse(localStorage.getItem(STORAGE_KEYS.LATEST_SCAN));
-    if (!data) return null;
-    
-    if (data.timestamp && Date.now() - data.timestamp > SCAN_EXPIRY_MS) {
-      localStorage.removeItem(STORAGE_KEYS.LATEST_SCAN);
-      return null;
-    }
-    
-    return data;
+    return safeJsonParse(localStorage.getItem(STORAGE_KEYS.LATEST_SCAN));
   },
-  saveScanResult: (result: ScanResult) => {
+
+  saveScanResult: async (result: ScanResult) => {
     const resultWithTime = { ...result, timestamp: Date.now() };
     safeStorageSet(STORAGE_KEYS.LATEST_SCAN, JSON.stringify(resultWithTime));
+    const profile = storage.getUserProfile();
+
+    if (profile) {
+      try {
+        await supabase.from('scans').insert({
+          mobile: profile.mobile,
+          status: result.status,
+          title: result.title,
+          message: result.message,
+          score: result.score,
+          hygiene: result.breakdown?.hygiene,
+          gums: result.breakdown?.gums,
+          structure: result.breakdown?.structure
+        });
+      } catch (err) {}
+    }
   },
+
   getDentalMap: (): Record<string, ToothStatus> => {
     return safeJsonParse(localStorage.getItem(STORAGE_KEYS.DENTAL_MAP)) || {};
   },
-  saveToothStatus: (status: ToothStatus) => {
+
+  saveToothStatus: async (status: ToothStatus) => {
     const currentMap = storage.getDentalMap();
     currentMap[status.id] = status;
     safeStorageSet(STORAGE_KEYS.DENTAL_MAP, JSON.stringify(currentMap));
+    const profile = storage.getUserProfile();
+
+    if (profile) {
+      try {
+        await supabase.from('dental_map').upsert({
+          mobile: profile.mobile,
+          tooth_id: status.id,
+          issue: status.issue,
+          severity: status.severity,
+          updated_at: new Date().toISOString()
+        }, { onConflict: 'mobile,tooth_id' });
+      } catch (err) {}
+    }
   },
-  clearDentalMap: () => {
+
+  clearDentalMap: async () => {
     localStorage.removeItem(STORAGE_KEYS.DENTAL_MAP);
+    const profile = storage.getUserProfile();
+    if (profile) {
+      try {
+        await supabase.from('dental_map').delete().eq('mobile', profile.mobile);
+      } catch (err) {}
+    }
   },
+
   getTheme: (): 'light' | 'dark' => {
     return (localStorage.getItem(STORAGE_KEYS.THEME) as 'light' | 'dark') || 'dark';
   },
+
   setTheme: (theme: 'light' | 'dark') => {
     safeStorageSet(STORAGE_KEYS.THEME, theme);
   },
-  setQuizCompleted: (plan: DentalProblem) => {
+
+  restoreFromCloud: async (mobile: string): Promise<UserProfile | null> => {
+    try {
+      const { data: profileData, error: profileErr } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('mobile', mobile)
+        .single();
+
+      if (profileErr || !profileData) return null;
+
+      const profile: UserProfile = {
+        fullName: profileData.full_name,
+        age: profileData.age,
+        gender: profileData.gender,
+        mobile: profileData.mobile,
+        currentPlan: profileData.current_plan
+      };
+
+      // Background restores...
+      supabase.from('dental_map').select('*').eq('mobile', mobile).then(({ data }) => {
+        if (data) {
+          const dentalMap: Record<string, ToothStatus> = {};
+          data.forEach(item => dentalMap[item.tooth_id] = { id: item.tooth_id, issue: item.issue, severity: item.severity });
+          safeStorageSet(STORAGE_KEYS.DENTAL_MAP, JSON.stringify(dentalMap));
+        }
+      });
+
+      return profile;
+    } catch (err) {
+      return null;
+    }
+  },
+
+  setQuizCompleted: async (plan: DentalProblem) => {
     const completed = safeJsonParse(localStorage.getItem(STORAGE_KEYS.QUIZ_COMPLETED)) || {};
     completed[plan] = true;
     safeStorageSet(STORAGE_KEYS.QUIZ_COMPLETED, JSON.stringify(completed));
   },
+
   addBadge: (badge: string) => {
     const currentBadges = safeJsonParse(localStorage.getItem(STORAGE_KEYS.BADGES)) || [];
     if (!currentBadges.includes(badge)) {
