@@ -1,0 +1,7 @@
+{
+  "name": "Copy of ORAL HEALTH NEXUS",
+  "description": "A comprehensive dental care management application featuring personalized care plans, progress tracking, and appointment booking.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
