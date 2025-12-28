@@ -67,6 +67,7 @@ export interface NexusError {
   title: string;
   message: string;
   code: string;
+  troubleshoot?: string[];
   canRetry?: boolean;
 }
 

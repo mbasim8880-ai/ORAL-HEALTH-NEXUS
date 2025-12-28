@@ -1,6 +1,7 @@
 
 import { UserProfile, DentalProblem, ScanResult, ToothStatus } from '../types';
 import { supabase } from './supabase.ts';
+import { mapError } from './errorMapper';
 
 const STORAGE_KEYS = {
   USER_PROFILE: 'ohn_user_profile',
@@ -36,11 +37,9 @@ export const storage = {
   },
 
   setUserProfile: async (profile: UserProfile): Promise<boolean> => {
-    // 1. Save Locally
     safeStorageSet(STORAGE_KEYS.USER_PROFILE, JSON.stringify(profile));
     safeStorageSet(STORAGE_KEYS.REGISTERED, 'true');
     
-    // 2. Cloud Sync
     try {
       const { error } = await supabase.from('profiles').upsert({
         mobile: profile.mobile,
@@ -52,13 +51,14 @@ export const storage = {
       }, { onConflict: 'mobile' });
 
       if (error) {
-        console.error("Cloud Error:", error);
-        alert(`NEXUS SYNC ERROR: ${error.message}`);
+        const mapped = mapError(error, 'DB');
+        alert(`${mapped.title}: ${mapped.message}\n\nTips:\n- ${mapped.troubleshoot?.join('\n- ')}`);
         return false;
       }
       return true;
     } catch (err: any) {
-      alert(`SYNC FAILED: ${err.message || 'Network error'}`);
+      const mapped = mapError(err, 'NETWORK');
+      alert(mapped.message);
       return false;
     }
   },
@@ -177,7 +177,6 @@ export const storage = {
         currentPlan: profileData.current_plan
       };
 
-      // Background restores...
       supabase.from('dental_map').select('*').eq('mobile', mobile).then(({ data }) => {
         if (data) {
           const dentalMap: Record<string, ToothStatus> = {};

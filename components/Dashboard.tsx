@@ -9,6 +9,7 @@ import DentalScanner from './DentalScanner.tsx';
 import DentalMap from './DentalMap.tsx';
 import DoctorSelection from './DoctorSelection.tsx';
 import { GoogleGenAI, Type } from '@google/genai';
+import { mapError } from '../services/errorMapper';
 
 const TipItem = React.memo(({ tip, idx, isLearned, onClick }: { tip: Tip, idx: number, isLearned: boolean, onClick: (t: Tip) => void }) => (
   <div 
@@ -110,11 +111,11 @@ const Dashboard: React.FC<Props> = ({ user, onUpdateUser, theme, onToggleTheme }
       
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: [{ 
+        contents: { 
           parts: [{ 
             text: `Conversation History:\n${historyText}\n\nCurrent Patient Message: ${message}\n\nPatient Profile: Age ${user.age}, Gender ${user.gender}, Care Plan: ${user.currentPlan}. Provide expert dental guidance. Always ask a clarifying follow-up question if needed and provide 2-4 short multiple-choice options for the user to respond easily.` 
           }] 
-        }],
+        },
         config: {
           systemInstruction: 'You are the Nexus Intelligent Assistant. Provide expert dental guidance. Be concise, professional, and scientifically accurate. Return your response as a JSON object with "text" (string) and "options" (array of strings).',
           responseMimeType: 'application/json',
@@ -127,7 +128,7 @@ const Dashboard: React.FC<Props> = ({ user, onUpdateUser, theme, onToggleTheme }
                 items: { type: Type.STRING } 
               }
             },
-            required: ['text']
+            propertyOrdering: ["text", "options"]
           }
         }
       });
@@ -140,13 +141,15 @@ const Dashboard: React.FC<Props> = ({ user, onUpdateUser, theme, onToggleTheme }
           options: result.options 
         }]);
       }
-    } catch (err) {
-      setModalError({
-        title: "Link Interrupted",
-        message: "Neural uplink with Nexus AI was severed. Check your network protocols.",
-        code: "AI_COMM_ERR",
-        canRetry: true
-      });
+    } catch (err: any) {
+      if (err?.message?.includes('Requested entity was not found')) {
+        // @ts-ignore
+        if (window.aistudio && window.aistudio.openSelectKey) {
+           // @ts-ignore
+           window.aistudio.openSelectKey();
+        }
+      }
+      setModalError(mapError(err, 'AI'));
     } finally {
       setIsAiLoading(false);
     }
@@ -329,6 +332,10 @@ const Dashboard: React.FC<Props> = ({ user, onUpdateUser, theme, onToggleTheme }
             </button>
          </div>
       </div>
+
+      {modalError && (
+        <Modal isOpen={!!modalError} onClose={clearModalState} title="System Error" error={modalError} onRetry={clearModalState} />
+      )}
 
       <div className="mt-2 flex-shrink-0">
         <div className="px-8 mb-6 flex items-center justify-between">

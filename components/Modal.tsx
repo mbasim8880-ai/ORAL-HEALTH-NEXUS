@@ -49,7 +49,7 @@ const Modal: React.FC<Props> = ({ isOpen, onClose, title, children, error, onRet
         <div className="flex justify-between items-start mb-6">
           <div>
              <span className="text-nexus-primary dark:text-sky-400 text-[10px] font-black uppercase tracking-[0.4em] mb-1 block">Nexus Operation</span>
-             <h3 id="modal-title" className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter leading-none">{error ? 'System Error' : title}</h3>
+             <h3 id="modal-title" className="text-3xl font-black text-slate-900 dark:text-white tracking-tighter leading-none">{error ? error.title : title}</h3>
           </div>
           <button 
             onClick={onClose} 
@@ -75,13 +75,26 @@ const Modal: React.FC<Props> = ({ isOpen, onClose, title, children, error, onRet
               </div>
 
               <div className="text-center space-y-2">
-                 <h4 className="text-2xl font-black text-slate-900 dark:text-white tracking-tight">{error.title}</h4>
                  <p className="text-slate-500 dark:text-slate-300 font-bold text-sm leading-relaxed px-4">{error.message}</p>
                  <div className="inline-block px-3 py-1 bg-slate-100 dark:bg-slate-800 rounded-full text-[10px] font-black text-slate-400 uppercase tracking-widest mt-1">Trace: {error.code}</div>
               </div>
 
+              {error.troubleshoot && error.troubleshoot.length > 0 && (
+                <div className="bg-slate-50 dark:bg-slate-900/50 p-6 rounded-[32px] border border-slate-100 dark:border-slate-800 space-y-4">
+                  <h4 className="text-[10px] font-black text-nexus-primary uppercase tracking-[0.3em]">Diagnostic Steps</h4>
+                  <ul className="space-y-3">
+                    {error.troubleshoot.map((tip, idx) => (
+                      <li key={idx} className="flex items-start space-x-3 text-xs font-bold text-slate-600 dark:text-slate-400 leading-snug">
+                        <div className="w-1.5 h-1.5 rounded-full bg-nexus-primary mt-1 flex-shrink-0"></div>
+                        <span>{tip}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+
               <div className="grid gap-4 pt-2">
-                 {onRetry && (
+                 {onRetry && error.canRetry && (
                    <button 
                      onClick={onRetry}
                      className="w-full bg-slate-900 dark:bg-white dark:text-slate-900 text-white py-5 rounded-[28px] font-black text-lg shadow-xl spring-click hover:brightness-110 uppercase tracking-tight"

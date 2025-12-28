@@ -1,5 +1,6 @@
 
 import { createClient } from '@supabase/supabase-js';
+import { mapError } from './errorMapper';
 
 const SUPABASE_URL = 'https://nbfetxccutniimddptji.supabase.co';
 const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Im5iZmV0eGNjdXRuaWltZGRwdGppIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjY4NTI5NDksImV4cCI6MjA4MjQyODk0OX0.dh5ckaazxpIkFTPYnxTa_TbsYi1bPxnyqpZWYBqzZvs';
@@ -8,18 +9,15 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
 export const checkSupabaseConnection = async (): Promise<{ success: boolean; message: string }> => {
   try {
-    // Attempt a lightweight query to check if the project is reachable
-    const { data, error } = await supabase.from('profiles').select('count', { count: 'exact', head: true });
+    const { error } = await supabase.from('profiles').select('count', { count: 'exact', head: true });
     
     if (error) {
-      if (error.message.includes('Failed to fetch')) {
-        return { success: false, message: "Network Error: Project unreachable. Check if Supabase project is PAUSED." };
-      }
-      return { success: false, message: `Database Error: ${error.message}` };
+      const mapped = mapError(error, 'NETWORK');
+      return { success: false, message: mapped.title };
     }
     
-    return { success: true, message: "Nexus Cloud Connected" };
+    return { success: true, message: "Nexus Cloud Online" };
   } catch (err: any) {
-    return { success: false, message: "Critical Connection Failure" };
+    return { success: false, message: "System Link Offline" };
   }
 };

@@ -1,8 +1,9 @@
 
 import React, { useState, useRef } from 'react';
-import { ScanResult } from '../types.ts';
+import { ScanResult, NexusError } from '../types.ts';
 import { storage } from '../services/storage.ts';
 import { GoogleGenAI, Type } from '@google/genai';
+import { mapError } from '../services/errorMapper';
 
 interface Props {
   onResult: (result: ScanResult) => void;
@@ -17,7 +18,7 @@ const DentalScanner: React.FC<Props> = ({ onResult, onBookEmergency, onClose, in
   const [previewImg, setPreviewImg] = useState<string | null>(null);
   const [mimeType, setMimeType] = useState<string>('');
   const [processText, setProcessText] = useState('Initializing Vision System...');
-  const [error, setError] = useState<{ message: string; tip: string; code: string } | null>(null);
+  const [error, setError] = useState<NexusError | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fileToBase64 = (file: File): Promise<string> => {
@@ -38,11 +39,7 @@ const DentalScanner: React.FC<Props> = ({ onResult, onBookEmergency, onClose, in
         setMimeType(file.type);
         setStep('PREVIEW');
       } catch (err) {
-        setError({
-          message: "Data Link Failure",
-          tip: "Unable to process this image encoding. Please try a different photo format.",
-          code: "ENC_ERR_01"
-        });
+        setError(mapError(err, 'AI'));
       }
     }
   };
@@ -69,15 +66,16 @@ const DentalScanner: React.FC<Props> = ({ onResult, onBookEmergency, onClose, in
     }, 1200);
 
     try {
+      // Create fresh instance right before usage to catch the latest key
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const response = await ai.models.generateContent({
         model: 'gemini-3-flash-preview',
-        contents: [{
+        contents: {
           parts: [
             { inlineData: { data: base64Data, mimeType: mimeType } },
             { text: "Act as a Senior Radiographic Dental Consultant. Perform a Professional Dental Audit. Provide a short Title (max 4 words). In the 'message', explain the findings using SIMPLE wording that a patient can understand, but use PROPER clinical treatment names (e.g., 'Composite Filling' instead of 'fix hole'). Focus on exactly what needs to be done next. Also provide scores from 0-100 for 'hygiene', 'gum_health', and 'structural_integrity'. Return JSON." }
           ]
-        }],
+        },
         config: {
           responseMimeType: "application/json",
           responseSchema: {
@@ -91,7 +89,8 @@ const DentalScanner: React.FC<Props> = ({ onResult, onBookEmergency, onClose, in
               gum_health_score: { type: Type.NUMBER },
               structural_integrity_score: { type: Type.NUMBER },
               error: { type: Type.STRING }
-            }
+            },
+            propertyOrdering: ["status", "title", "message", "score", "hygiene_score", "gum_health_score", "structural_integrity_score"]
           }
         }
       });
@@ -118,11 +117,15 @@ const DentalScanner: React.FC<Props> = ({ onResult, onBookEmergency, onClose, in
       onResult(finalResult);
       setStep('RESULT');
     } catch (err: any) {
-      setError({ 
-        message: "Diagnostic Interrupted", 
-        tip: "Ensure your lighting is bright and the subject is clearly centered.", 
-        code: "SYS_RETRY" 
-      });
+      if (err?.message?.includes('Requested entity was not found')) {
+        // Handle key invalidation
+        // @ts-ignore
+        if (window.aistudio && window.aistudio.openSelectKey) {
+           // @ts-ignore
+           window.aistudio.openSelectKey();
+        }
+      }
+      setError(mapError(err, 'AI'));
       setStep('IDLE');
     } finally {
       clearInterval(stepInterval);
@@ -157,8 +160,15 @@ const DentalScanner: React.FC<Props> = ({ onResult, onBookEmergency, onClose, in
                   </svg>
                 </div>
                 <div className="flex-1">
-                  <h4 className="text-red-400 font-black text-sm uppercase tracking-tight">{error.message}</h4>
-                  <p className="text-red-300 font-bold text-xs leading-relaxed mt-1.5">{error.tip}</p>
+                  <h4 className="text-red-400 font-black text-sm uppercase tracking-tight">{error.title}</h4>
+                  <p className="text-red-300 font-bold text-xs leading-relaxed mt-1.5">{error.message}</p>
+                  {error.troubleshoot && (
+                    <ul className="mt-3 space-y-1">
+                      {error.troubleshoot.map((t, i) => (
+                        <li key={i} className="text-[10px] text-red-400/70 font-bold">• {t}</li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               </div>
             </div>
@@ -186,7 +196,6 @@ const DentalScanner: React.FC<Props> = ({ onResult, onBookEmergency, onClose, in
            <div className="relative aspect-square rounded-[44px] overflow-hidden border-4 border-nexus-primary shadow-2xl">
               <img src={previewImg} alt="Capture Preview" className="w-full h-full object-cover" />
               <div className="absolute inset-0 bg-blue-500/10 pointer-events-none"></div>
-              {/* Scan Overlay UI */}
               <div className="absolute inset-0 flex items-center justify-center opacity-40">
                  <div className="w-[80%] h-[80%] border-2 border-white/50 border-dashed rounded-[32px]"></div>
                  <div className="absolute top-0 left-0 w-full h-[2px] bg-white animate-[scan_3s_infinite]"></div>
