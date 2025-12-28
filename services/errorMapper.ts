@@ -4,6 +4,21 @@ import { NexusError } from '../types';
 export const mapError = (err: any, context: 'DB' | 'AI' | 'NETWORK'): NexusError => {
   const message = err?.message || 'An unexpected interruption occurred.';
   
+  // API Key Invalidation Detection (Crucial for Netlify/AI Studio context)
+  if (message.includes('Requested entity was not found') || message.includes('API key not found') || message.includes('403') || message.includes('401')) {
+    return {
+      title: "AI Authentication Failed",
+      message: "The current AI Link is inactive or unauthorized.",
+      code: "API_KEY_INVALID",
+      troubleshoot: [
+        "Click 'Connect AI Key' to refresh your link.",
+        "Ensure your Google Cloud Project has billing enabled.",
+        "Check if your API key has expired or been restricted."
+      ],
+      canRetry: true
+    };
+  }
+
   // Network / Supabase Connectivity
   if (message.includes('Failed to fetch') || message.includes('Network Error')) {
     return {

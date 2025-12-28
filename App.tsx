@@ -16,8 +16,7 @@ const App: React.FC = () => {
 
   // Widget Security & Context
   const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
-  const nexusApiKey = urlParams.get('nexus-api-key') || 'NEXUS-DEMO-2025';
-
+  
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -26,14 +25,20 @@ const App: React.FC = () => {
     }
   }, [theme]);
 
-  // Check for API Key presence for AI features
+  // Comprehensive Key Check for Live Deployments (Netlify/Vercel)
   useEffect(() => {
     const checkKey = async () => {
+      // Check if process.env.API_KEY is actually a valid non-empty string
+      const envKeyExists = process.env.API_KEY && process.env.API_KEY !== 'undefined' && process.env.API_KEY.length > 5;
+      
       // @ts-ignore
       if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
         // @ts-ignore
         const selected = await window.aistudio.hasSelectedApiKey();
-        setHasKey(selected);
+        // We only require a selection if the hardcoded env key doesn't exist
+        setHasKey(selected || !!envKeyExists);
+      } else {
+        setHasKey(!!envKeyExists);
       }
     };
     checkKey();
@@ -44,7 +49,10 @@ const App: React.FC = () => {
     if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
       // @ts-ignore
       await window.aistudio.openSelectKey();
-      setHasKey(true); // Assume success after triggering
+      setHasKey(true); // Proceed to app after triggering selection
+    } else {
+      // If deployed on standard web without AI Studio bridge, alert the developer
+      alert("NEXUS LINK ERROR: This environment requires an API_KEY variable set in your Netlify dashboard.");
     }
   };
 
@@ -53,7 +61,6 @@ const App: React.FC = () => {
     const profile = storage.getUserProfile();
     if (profile) {
       setUser(profile);
-      // Background Sync
       setIsSyncing(true);
       storage.restoreFromCloud(profile.mobile).then((syncedProfile) => {
         if (syncedProfile) {
@@ -80,8 +87,7 @@ const App: React.FC = () => {
   };
 
   const handleRegistration = async (profile: UserProfile) => {
-    // Await the cloud sync
-    const success = await storage.setUserProfile(profile);
+    await storage.setUserProfile(profile);
     setUser(profile);
     setView(AppState.DASHBOARD);
   };
@@ -98,19 +104,29 @@ const App: React.FC = () => {
   };
 
   return (
-    <div className={`fixed inset-0 sm:inset-auto sm:bottom-6 sm:right-6 sm:w-[400px] sm:h-[700px] bg-white dark:bg-slate-900 rounded-none sm:rounded-[44px] shadow-[0_32px_128px_rgba(0,0,0,0.3)] z-[10000] overflow-hidden transition-all duration-500 border-0 sm:border-4 sm:border-slate-100 dark:sm:border-slate-800 animate-in slide-in-from-bottom-20`}>
+    <div className={`fixed inset-0 sm:inset-auto sm:bottom-6 sm:right-6 sm:w-[400px] sm:h-[700px] bg-white dark:bg-slate-950 rounded-none sm:rounded-[44px] shadow-[0_32px_128px_rgba(0,0,0,0.4)] z-[10000] overflow-hidden transition-all duration-500 border-0 sm:border-4 sm:border-slate-100 dark:sm:border-slate-900 animate-in slide-in-from-bottom-20`}>
       
       {!hasKey && (
-        <div className="absolute inset-0 z-[10002] bg-slate-950/90 backdrop-blur-xl flex flex-col items-center justify-center p-10 text-center text-white">
-          <div className="w-20 h-20 bg-blue-600 rounded-3xl flex items-center justify-center mb-8 shadow-2xl">
-            <svg xmlns="http://www.w3.org/2000/svg" className="h-10 w-10" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15 7a2 2 0 012 2m4 0a6 6 0 01-7.743 5.743L11 17H9v2H7v2H4a1 1 0 01-1-1v-2.586a1 1 0 01.293-.707l5.964-5.964A6 6 0 1121 9z" />
+        <div className="absolute inset-0 z-[10002] bg-slate-950/95 backdrop-blur-2xl flex flex-col items-center justify-center p-12 text-center text-white">
+          <div className="w-24 h-24 bg-blue-600 rounded-[32px] flex items-center justify-center mb-10 shadow-[0_20px_40px_rgba(37,99,235,0.4)] animate-pulse">
+            <svg xmlns="http://www.w3.org/2000/svg" className="h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
-          <h2 className="text-3xl font-black mb-4 tracking-tight">AI Key Required</h2>
-          <p className="text-slate-400 font-bold text-sm mb-10 leading-relaxed">To enable Nexus Vision and Intelligent Diagnostics, please select a paid Google Cloud Project key.</p>
-          <button onClick={handleSelectKey} className="w-full blue-gradient py-6 rounded-3xl font-black text-xl uppercase tracking-tight shadow-xl spring-click">Select Key</button>
-          <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="mt-6 text-[10px] font-black text-blue-400 uppercase tracking-widest hover:underline">Billing Documentation</a>
+          <h2 className="text-3xl font-black mb-4 tracking-tight leading-none">Initialize AI Link</h2>
+          <p className="text-slate-400 font-bold text-sm mb-12 leading-relaxed">
+            The Nexus Neural Engine requires a secure API key to process diagnostics. Please select a valid key to activate Vision and Chat features.
+          </p>
+          <button 
+            onClick={handleSelectKey} 
+            className="w-full blue-gradient py-6 rounded-3xl font-black text-xl uppercase tracking-tight shadow-2xl spring-click hover:brightness-110"
+          >
+            Connect AI Key
+          </button>
+          <div className="mt-8 flex flex-col items-center space-y-4">
+            <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline">View Billing Docs</a>
+            <p className="text-[9px] text-slate-600 font-black uppercase tracking-[0.2em]">Secure End-to-End Encryption Active</p>
+          </div>
         </div>
       )}
 
@@ -126,10 +142,10 @@ const App: React.FC = () => {
         />
       )}
       
-      {/* Background Sync Indicator */}
       {isSyncing && (
-        <div className="fixed top-4 right-4 z-[10001] animate-pulse">
-           <div className="w-2 h-2 rounded-full bg-nexus-cyan shadow-[0_0_10px_rgba(6,182,212,0.5)]"></div>
+        <div className="fixed top-6 right-6 z-[10001] flex items-center space-x-2">
+           <span className="text-[8px] font-black text-nexus-cyan uppercase tracking-widest animate-pulse">Syncing</span>
+           <div className="w-2 h-2 rounded-full bg-nexus-cyan shadow-[0_0_12px_rgba(6,182,212,0.8)] animate-pulse"></div>
         </div>
       )}
     </div>

@@ -106,6 +106,7 @@ const Dashboard: React.FC<Props> = ({ user, onUpdateUser, theme, onToggleTheme }
     setModalError(null);
 
     try {
+      // Create fresh instance to pick up the most recent key
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const historyText = chatMessages.slice(-4).map(m => `${m.role === 'user' ? 'Patient' : 'AI'}: ${m.text}`).join('\n');
       
@@ -113,11 +114,11 @@ const Dashboard: React.FC<Props> = ({ user, onUpdateUser, theme, onToggleTheme }
         model: 'gemini-3-flash-preview',
         contents: { 
           parts: [{ 
-            text: `Conversation History:\n${historyText}\n\nCurrent Patient Message: ${message}\n\nPatient Profile: Age ${user.age}, Gender ${user.gender}, Care Plan: ${user.currentPlan}. Provide expert dental guidance. Always ask a clarifying follow-up question if needed and provide 2-4 short multiple-choice options for the user to respond easily.` 
+            text: `Conversation History:\n${historyText}\n\nCurrent Patient Message: ${message}\n\nPatient Profile: Age ${user.age}, Gender ${user.gender}, Care Plan: ${user.currentPlan}. Provide expert dental guidance. Be precise but empathetic.` 
           }] 
         },
         config: {
-          systemInstruction: 'You are the Nexus Intelligent Assistant. Provide expert dental guidance. Be concise, professional, and scientifically accurate. Return your response as a JSON object with "text" (string) and "options" (array of strings).',
+          systemInstruction: 'You are the Nexus Intelligent Assistant. Provide expert dental guidance. Return your response as a JSON object with "text" (string) and "options" (array of strings).',
           responseMimeType: 'application/json',
           responseSchema: {
             type: Type.OBJECT,
@@ -127,8 +128,7 @@ const Dashboard: React.FC<Props> = ({ user, onUpdateUser, theme, onToggleTheme }
                 type: Type.ARRAY, 
                 items: { type: Type.STRING } 
               }
-            },
-            propertyOrdering: ["text", "options"]
+            }
           }
         }
       });
@@ -142,14 +142,16 @@ const Dashboard: React.FC<Props> = ({ user, onUpdateUser, theme, onToggleTheme }
         }]);
       }
     } catch (err: any) {
-      if (err?.message?.includes('Requested entity was not found')) {
+      const mapped = mapError(err, 'AI');
+      if (mapped.code === 'API_KEY_INVALID') {
+        // Trigger key selection if the current key is rejected by the server
         // @ts-ignore
         if (window.aistudio && window.aistudio.openSelectKey) {
            // @ts-ignore
-           window.aistudio.openSelectKey();
+           await window.aistudio.openSelectKey();
         }
       }
-      setModalError(mapError(err, 'AI'));
+      setModalError(mapped);
     } finally {
       setIsAiLoading(false);
     }
