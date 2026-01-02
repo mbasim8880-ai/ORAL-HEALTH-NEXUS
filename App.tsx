@@ -14,9 +14,6 @@ const App: React.FC = () => {
   const [isSyncing, setIsSyncing] = useState(false);
   const [hasKey, setHasKey] = useState(true);
 
-  // Widget Security & Context
-  const urlParams = useMemo(() => new URLSearchParams(window.location.search), []);
-  
   useEffect(() => {
     if (theme === 'dark') {
       document.documentElement.classList.add('dark');
@@ -25,20 +22,20 @@ const App: React.FC = () => {
     }
   }, [theme]);
 
-  // Comprehensive Key Check for Live Deployments (Netlify/Vercel)
+  // Comprehensive Key Check for ORAL HEALTH NEXUS Link
   useEffect(() => {
     const checkKey = async () => {
-      // Check if process.env.API_KEY is actually a valid non-empty string
-      const envKeyExists = process.env.API_KEY && process.env.API_KEY !== 'undefined' && process.env.API_KEY.length > 5;
+      // Use the provided environment key
+      const activeKey = process.env.API_KEY;
+      const keyIsValid = activeKey && activeKey !== 'undefined' && activeKey.length > 10;
       
       // @ts-ignore
       if (window.aistudio && typeof window.aistudio.hasSelectedApiKey === 'function') {
         // @ts-ignore
         const selected = await window.aistudio.hasSelectedApiKey();
-        // We only require a selection if the hardcoded env key doesn't exist
-        setHasKey(selected || !!envKeyExists);
+        setHasKey(selected || !!keyIsValid);
       } else {
-        setHasKey(!!envKeyExists);
+        setHasKey(!!keyIsValid);
       }
     };
     checkKey();
@@ -49,14 +46,12 @@ const App: React.FC = () => {
     if (window.aistudio && typeof window.aistudio.openSelectKey === 'function') {
       // @ts-ignore
       await window.aistudio.openSelectKey();
-      setHasKey(true); // Proceed to app after triggering selection
+      setHasKey(true); 
     } else {
-      // If deployed on standard web without AI Studio bridge, alert the developer
-      alert("NEXUS LINK ERROR: This environment requires an API_KEY variable set in your Netlify dashboard.");
+      alert("NEXUS LINK ERROR: API_KEY environment variable is required for neural features.");
     }
   };
 
-  // Handle background sync when profile exists
   useEffect(() => {
     const profile = storage.getUserProfile();
     if (profile) {
@@ -65,7 +60,6 @@ const App: React.FC = () => {
       storage.restoreFromCloud(profile.mobile).then((syncedProfile) => {
         if (syncedProfile) {
           setUser(syncedProfile);
-          console.log("Nexus: Background Cloud Sync Complete");
         }
         setIsSyncing(false);
       });
@@ -113,20 +107,16 @@ const App: React.FC = () => {
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
             </svg>
           </div>
-          <h2 className="text-3xl font-black mb-4 tracking-tight leading-none">Initialize AI Link</h2>
+          <h2 className="text-3xl font-black mb-4 tracking-tight leading-none">AI Link Offline</h2>
           <p className="text-slate-400 font-bold text-sm mb-12 leading-relaxed">
-            The Nexus Neural Engine requires a secure API key to process diagnostics. Please select a valid key to activate Vision and Chat features.
+            The Nexus Neural Engine requires an active API key to process optical diagnostics and chat intelligence.
           </p>
           <button 
             onClick={handleSelectKey} 
             className="w-full blue-gradient py-6 rounded-3xl font-black text-xl uppercase tracking-tight shadow-2xl spring-click hover:brightness-110"
           >
-            Connect AI Key
+            Activate Nexus Link
           </button>
-          <div className="mt-8 flex flex-col items-center space-y-4">
-            <a href="https://ai.google.dev/gemini-api/docs/billing" target="_blank" className="text-[10px] font-black text-blue-500 uppercase tracking-widest hover:underline">View Billing Docs</a>
-            <p className="text-[9px] text-slate-600 font-black uppercase tracking-[0.2em]">Secure End-to-End Encryption Active</p>
-          </div>
         </div>
       )}
 
