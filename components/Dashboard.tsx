@@ -106,12 +106,11 @@ const Dashboard: React.FC<Props> = ({ user, onUpdateUser, theme, onToggleTheme }
     setModalError(null);
 
     try {
-      // Create fresh instance to pick up the most recent key
       const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
       const historyText = chatMessages.slice(-4).map(m => `${m.role === 'user' ? 'Patient' : 'AI'}: ${m.text}`).join('\n');
       
       const response = await ai.models.generateContent({
-        model: 'gemini-3-flash-preview',
+        model: 'gemini-3-pro-preview',
         contents: { 
           parts: [{ 
             text: `Conversation History:\n${historyText}\n\nCurrent Patient Message: ${message}\n\nPatient Profile: Age ${user.age}, Gender ${user.gender}, Care Plan: ${user.currentPlan}. Provide expert dental guidance. Be precise but empathetic.` 
@@ -142,16 +141,7 @@ const Dashboard: React.FC<Props> = ({ user, onUpdateUser, theme, onToggleTheme }
         }]);
       }
     } catch (err: any) {
-      const mapped = mapError(err, 'AI');
-      if (mapped.code === 'API_KEY_INVALID') {
-        // Trigger key selection if the current key is rejected by the server
-        // @ts-ignore
-        if (window.aistudio && window.aistudio.openSelectKey) {
-           // @ts-ignore
-           await window.aistudio.openSelectKey();
-        }
-      }
-      setModalError(mapped);
+      setModalError(mapError(err, 'AI'));
     } finally {
       setIsAiLoading(false);
     }
@@ -335,8 +325,11 @@ const Dashboard: React.FC<Props> = ({ user, onUpdateUser, theme, onToggleTheme }
          </div>
       </div>
 
+      {/* Fix: Pass children to satisfy required prop even in error state */}
       {modalError && (
-        <Modal isOpen={!!modalError} onClose={clearModalState} title="System Error" error={modalError} onRetry={clearModalState} />
+        <Modal isOpen={!!modalError} onClose={clearModalState} title="System Error" error={modalError} onRetry={clearModalState}>
+          <React.Fragment />
+        </Modal>
       )}
 
       <div className="mt-2 flex-shrink-0">

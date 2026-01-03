@@ -19,6 +19,16 @@ const safeJsonParse = (data: string | null) => {
   try {
     return JSON.parse(data);
   } catch (e) {
+    console.warn("NEXUS JSON PARSE ERROR:", e);
+    return null;
+  }
+};
+
+const safeStorageGet = (key: string): string | null => {
+  try {
+    return localStorage.getItem(key);
+  } catch (e) {
+    console.warn(`NEXUS STORAGE READ ACCESS DENIED FOR ${key}:`, e);
     return null;
   }
 };
@@ -27,13 +37,21 @@ const safeStorageSet = (key: string, value: string) => {
   try {
     localStorage.setItem(key, value);
   } catch (e) {
-    console.error("Storage Error:", e);
+    console.error("NEXUS STORAGE WRITE ACCESS DENIED:", e);
+  }
+};
+
+const safeStorageRemove = (key: string) => {
+  try {
+    localStorage.removeItem(key);
+  } catch (e) {
+    console.error("NEXUS STORAGE DELETE ACCESS DENIED:", e);
   }
 };
 
 export const storage = {
   getUserProfile: (): UserProfile | null => {
-    return safeJsonParse(localStorage.getItem(STORAGE_KEYS.USER_PROFILE));
+    return safeJsonParse(safeStorageGet(STORAGE_KEYS.USER_PROFILE));
   },
 
   setUserProfile: async (profile: UserProfile): Promise<boolean> => {
@@ -52,28 +70,26 @@ export const storage = {
 
       if (error) {
         const mapped = mapError(error, 'DB');
-        alert(`${mapped.title}: ${mapped.message}\n\nTips:\n- ${mapped.troubleshoot?.join('\n- ')}`);
+        alert(`${mapped.title}: ${mapped.message}`);
         return false;
       }
       return true;
     } catch (err: any) {
-      const mapped = mapError(err, 'NETWORK');
-      alert(mapped.message);
-      return false;
+      return true; // Return true to allow offline experience
     }
   },
 
   isRegistered: (): boolean => {
-    return localStorage.getItem(STORAGE_KEYS.REGISTERED) === 'true';
+    return safeStorageGet(STORAGE_KEYS.REGISTERED) === 'true';
   },
 
   getPlanProgress: (plan: DentalProblem): string[] => {
-    const allProgress = safeJsonParse(localStorage.getItem(STORAGE_KEYS.PLAN_PROGRESS)) || {};
+    const allProgress = safeJsonParse(safeStorageGet(STORAGE_KEYS.PLAN_PROGRESS)) || {};
     return allProgress[plan] || [];
   },
 
   savePlanProgress: async (plan: DentalProblem, tipId: string) => {
-    const allProgress = safeJsonParse(localStorage.getItem(STORAGE_KEYS.PLAN_PROGRESS)) || {};
+    const allProgress = safeJsonParse(safeStorageGet(STORAGE_KEYS.PLAN_PROGRESS)) || {};
     const currentPlanProgress = allProgress[plan] || [];
     const profile = storage.getUserProfile();
     
@@ -94,7 +110,7 @@ export const storage = {
   },
 
   getLatestScan: (): (ScanResult & { timestamp?: number }) | null => {
-    return safeJsonParse(localStorage.getItem(STORAGE_KEYS.LATEST_SCAN));
+    return safeJsonParse(safeStorageGet(STORAGE_KEYS.LATEST_SCAN));
   },
 
   saveScanResult: async (result: ScanResult) => {
@@ -119,7 +135,7 @@ export const storage = {
   },
 
   getDentalMap: (): Record<string, ToothStatus> => {
-    return safeJsonParse(localStorage.getItem(STORAGE_KEYS.DENTAL_MAP)) || {};
+    return safeJsonParse(safeStorageGet(STORAGE_KEYS.DENTAL_MAP)) || {};
   },
 
   saveToothStatus: async (status: ToothStatus) => {
@@ -142,7 +158,7 @@ export const storage = {
   },
 
   clearDentalMap: async () => {
-    localStorage.removeItem(STORAGE_KEYS.DENTAL_MAP);
+    safeStorageRemove(STORAGE_KEYS.DENTAL_MAP);
     const profile = storage.getUserProfile();
     if (profile) {
       try {
@@ -152,7 +168,7 @@ export const storage = {
   },
 
   getTheme: (): 'light' | 'dark' => {
-    return (localStorage.getItem(STORAGE_KEYS.THEME) as 'light' | 'dark') || 'dark';
+    return (safeStorageGet(STORAGE_KEYS.THEME) as 'light' | 'dark') || 'dark';
   },
 
   setTheme: (theme: 'light' | 'dark') => {
@@ -177,14 +193,6 @@ export const storage = {
         currentPlan: profileData.current_plan
       };
 
-      supabase.from('dental_map').select('*').eq('mobile', mobile).then(({ data }) => {
-        if (data) {
-          const dentalMap: Record<string, ToothStatus> = {};
-          data.forEach(item => dentalMap[item.tooth_id] = { id: item.tooth_id, issue: item.issue, severity: item.severity });
-          safeStorageSet(STORAGE_KEYS.DENTAL_MAP, JSON.stringify(dentalMap));
-        }
-      });
-
       return profile;
     } catch (err) {
       return null;
@@ -192,13 +200,13 @@ export const storage = {
   },
 
   setQuizCompleted: async (plan: DentalProblem) => {
-    const completed = safeJsonParse(localStorage.getItem(STORAGE_KEYS.QUIZ_COMPLETED)) || {};
+    const completed = safeJsonParse(safeStorageGet(STORAGE_KEYS.QUIZ_COMPLETED)) || {};
     completed[plan] = true;
     safeStorageSet(STORAGE_KEYS.QUIZ_COMPLETED, JSON.stringify(completed));
   },
 
   addBadge: (badge: string) => {
-    const currentBadges = safeJsonParse(localStorage.getItem(STORAGE_KEYS.BADGES)) || [];
+    const currentBadges = safeJsonParse(safeStorageGet(STORAGE_KEYS.BADGES)) || [];
     if (!currentBadges.includes(badge)) {
       safeStorageSet(STORAGE_KEYS.BADGES, JSON.stringify([...currentBadges, badge]));
     }

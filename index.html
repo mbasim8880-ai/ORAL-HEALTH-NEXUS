@@ -2,9 +2,26 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+    <script>
+      // NEXUS CORE: Bulletproof Environment Shim
+      // Must execute before any module scripts load
+      (function() {
+        const apiKey = "AIzaSyAe9yX9Qu--RzmvsWt-fjHe--dp3ihsOUQ";
+        if (typeof window !== 'undefined') {
+          window.process = window.process || {};
+          window.process.env = window.process.env || {};
+          window.process.env.API_KEY = apiKey;
+          // Sync with globalThis for comprehensive coverage
+          if (typeof globalThis !== 'undefined') {
+            globalThis.process = window.process;
+          }
+        }
+      })();
+    </script>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
     <title>Oral Health Nexus Widget</title>
+    
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <script src="https://cdn.tailwindcss.com"></script>
@@ -78,7 +95,10 @@
             height: 100%;
             margin: 0;
             padding: 0;
-            background-color: transparent; /* Essential for iframe transparency */
+            background-color: #f8fafc;
+        }
+        .dark html, .dark body {
+            background-color: #020617;
         }
         body {
             font-family: 'Plus Jakarta Sans', sans-serif;
